@@ -3,215 +3,275 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-  <title>ASTM D2488 — RU/EN Soil Description Generator</title>
-  <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#111827"/>
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="D2488 RU/EN">
-  <style>
-    html,body { background: #f6f7f9; }
-    .chip { border:1px solid #e5e7eb; border-radius:9999px; padding:.25rem .75rem; }
-    .chip.active { background:#111827; color:white; }
-    textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; }
-  </style>
-  <!-- Tailwind (CDN) -->
+  <title>ASTM D2488 — RU/EN Soil Description Generator (Simple)</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React + ReactDOM + Babel (CDN) -->
   <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    html,body { background:#f6f7f9; }
+    .chip { border:1px solid #e5e7eb; border-radius:9999px; padding:.25rem .75rem; }
+    .chip.active { background:#111827; color:#fff; }
+    textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; }
+  </style>
 </head>
 <body class="min-h-screen">
-  <div id="root"></div>
+<div id="root"></div>
 
-  <script type="text/babel">
-  const {useState, useMemo} = React;
-  const Section = ({ title, subtitle, children }) => (
-    <div className="bg-white/80 rounded-2xl shadow p-4 md:p-6 space-y-3">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-        {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
-      </div>
-      <div className="grid grid-cols-1 gap-4">{children}</div>
+<script type="text/babel">
+const {useState, useMemo} = React;
+
+const Section = ({ title, subtitle, children }) => (
+  <div className="bg-white/80 rounded-2xl shadow p-4 md:p-6 space-y-3">
+    <div>
+      <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+      {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
     </div>
-  );
-  const Label = ({ children }) => (<label className="text-sm font-medium text-gray-800">{children}</label>);
-  const TextInput = ({ value, onChange, placeholder, type="text" }) => (
-    <input className="w-full rounded-xl border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-800"
-           value={value ?? ""} onChange={e=>onChange(e.target.value)} placeholder={placeholder} type={type} />
-  );
-  const NumberInput = ({ value, onChange, placeholder, step=1, min, max }) => (
-    <input className="w-full rounded-xl border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-800"
-           value={value ?? ""} onChange={e=>onChange(e.target.value.replace(",", "."))} placeholder={placeholder}
-           type="number" step={step} min={min} max={max} />
-  );
-  const Chips = ({ items, value, setValue, allowNone=true }) => (
-    <div className="flex flex-wrap gap-2">
-      {allowNone && (<button type="button" onClick={()=>setValue("")} className={"chip " + (!value ? "active" : "")}>—</button>)}
-      {items.map(it => (
-        <button type="button" key={it.key} onClick={()=>setValue(it.key)} className={"chip " + (value === it.key ? "active" : "")} title={it.en}>{it.ru}</button>
-      ))}
-    </div>
-  );
-  const MultiChips = ({ items, values, setValues }) => (
-    <div className="flex flex-wrap gap-2">
-      {items.map(it => {
-        const active = values.includes(it.key);
-        return (<button key={it.key} type="button" onClick={()=>{ if (active) setValues(values.filter(v => v !== it.key)); else setValues([...values, it.key]); }} className={"chip " + (active ? "active" : "")} title={it.en}>{it.ru}</button>);
-      })}
-    </div>
-  );
-  const CopyButton = ({ text, label="Скопировать" }) => (
-    <button onClick={async ()=>{ try { await navigator.clipboard.writeText(text); alert("Скопировано в буфер обмена"); } catch(e) { alert("Не удалось автоматически скопировать. Скопируйте вручную."); } }} className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90 active:opacity-80">{label}</button>
-  );
-  const ANGULARITY=[{key:"angular",ru:"угловатые",en:"angular"},{key:"subangular",ru:"субугловатые",en:"subangular"},{key:"subrounded",ru:"субокатанные",en:"subrounded"},{key:"rounded",ru:"окатанные",en:"rounded"}];
-  const SHAPE=[{key:"flat",ru:"плоские",en:"flat"},{key:"elongated",ru:"вытянутые",en:"elongated"},{key:"flatelong",ru:"плоско‑вытянутые",en:"flat and elongated"}];
-  const SAND_RANGES=[{key:"fine",ru:"мелкий",en:"fine"},{key:"medium",ru:"средний",en:"medium"},{key:"coarse",ru:"крупный",en:"coarse"}];
-  const GRAVEL_RANGES=[{key:"fine",ru:"мелкий",en:"fine"},{key:"coarse",ru:"крупный",en:"coarse"}];
-  const PLASTICITY=[{key:"np",ru:"непластичная",en:"nonplastic"},{key:"low",ru:"низкая",en:"low"},{key:"med",ru:"средняя",en:"medium"},{key:"high",ru:"высокая",en:"high"}];
-  const DRY_STRENGTH=[{key:"none",ru:"нет",en:"none"},{key:"low",ru:"низкая",en:"low"},{key:"med",ru:"средняя",en:"medium"},{key:"high",ru:"высокая",en:"high"},{key:"vhigh",ru:"очень высокая",en:"very high"}];
-  const DILATANCY=[{key:"none",ru:"нет",en:"none"},{key:"slow",ru:"медленная",en:"slow"},{key:"rapid",ru:"быстрая",en:"rapid"}];
-  const TOUGHNESS=[{key:"low",ru:"низкая",en:"low"},{key:"med",ru:"средняя",en:"medium"},{key:"high",ru:"высокая",en:"high"}];
-  const MOISTURE=[{key:"dry",ru:"сухой",en:"dry"},{key:"moist",ru:"влажный",en:"moist"},{key:"wet",ru:"мокрый",en:"wet"}];
-  const HCL=[{key:"none",ru:"нет",en:"none"},{key:"weak",ru:"слабая",en:"weak"},{key:"strong",ru:"сильная",en:"strong"}];
-  const CONSISTENCY=[{key:"vsoft",ru:"очень мягкая",en:"very soft"},{key:"soft",ru:"мягкая",en:"soft"},{key:"firm",ru:"тугопластичная/firm",en:"firm"},{key:"hard",ru:"твёрдая",en:"hard"},{key:"vhard",ru:"очень твёрдая",en:"very hard"}];
-  const STRUCTURE=[{key:"stratified",ru:"слоистая",en:"stratified"},{key:"laminated",ru:"ламинированная",en:"laminated"},{key:"fissured",ru:"трещиноватая",en:"fissured"},{key:"slickensided",ru:"со сликенсайдами",en:"slickensided"},{key:"lensed",ru:"линзовидная",en:"lensed"},{key:"homogeneous",ru:"однородная",en:"homogeneous"}];
-  const CEMENTATION=[{key:"weak",ru:"слабая",en:"weak"},{key:"moderate",ru:"умеренная",en:"moderate"},{key:"strong",ru:"сильная",en:"strong"}];
-  const SYMBOLS=[\"GW\",\"GP\",\"GM\",\"GC\",\"GW-GM\",\"GW-GC\",\"GP-GM\",\"GP-GC\",\"SW\",\"SP\",\"SM\",\"SC\",\"SW-SM\",\"SW-SC\",\"SP-SM\",\"SP-SC\",\"ML\",\"CL\",\"OL\",\"MH\",\"CH\",\"OH\",\"ML-CL\",\"PT\"];
-  const sRU={\"GW\":\"Гравий хорошо отсортированный\",\"GP\":\"Гравий плохо отсортированный\",\"GM\":\"Гравий с илами\",\"GC\":\"Гравий с глинами\",\"SW\":\"Песок хорошо отсортированный\",\"SP\":\"Песок плохо отсортированный\",\"SM\":\"Песок с илами\",\"SC\":\"Песок с глинами\",\"ML\":\"Илы низкой пластичности\",\"CL\":\"Глины малой пластичности (суглинок)\",\"MH\":\"Илы высокой пластичности\",\"CH\":\"Глины высокой пластичности\",\"OL\":\"Органические илы/глины (низкая пластичность)\",\"OH\":\"Органические илы/глины (высокая пластичность)\",\"PT\":\"Торф (высокоорганический)\"};
-  const sEN={\"GW\":\"Well-graded gravel\",\"GP\":\"Poorly graded gravel\",\"GM\":\"Gravel with silt\",\"GC\":\"Gravel with clay\",\"SW\":\"Well-graded sand\",\"SP\":\"Poorly graded sand\",\"SM\":\"Sand with silt\",\"SC\":\"Sand with clay\",\"ML\":\"Silt of low plasticity\",\"CL\":\"Lean clay\",\"MH\":\"Elastic silt (high plasticity)\",\"CH\":\"Fat clay (high plasticity)\",\"OL\":\"Organic silt/clay (low plasticity)\",\"OH\":\"Organic silt/clay (high plasticity)\",\"PT\":\"Peat (highly organic)\"};
+    <div className="grid grid-cols-1 gap-4">{children}</div>
+  </div>
+);
 
-  function App(){
-    const [groupNameRU,setGroupNameRU]=React.useState(\"\"); const [groupNameEN,setGroupNameEN]=React.useState(\"\"); const [symbol,setSymbol]=React.useState(\"\"); 
-    const [cobblesVol,setCobblesVol]=React.useState(\"\"); const [gravelPct,setGravelPct]=React.useState(\"\"); const [sandPct,setSandPct]=React.useState(\"\"); const [finesPct,setFinesPct]=React.useState(\"\"); 
-    const [gravelRange,setGravelRange]=React.useState(\"\"); const [sandRange,setSandRange]=React.useState(\"\"); const [angularity,setAngularity]=React.useState(\"\"); const [shape,setShape]=React.useState(\"\"); const [dmax,setDmax]=React.useState(\"\"); const [hardness,setHardness]=React.useState(\"\"); 
-    const [plasticity,setPlasticity]=React.useState(\"\"); const [dryStrength,setDryStrength]=React.useState(\"\"); const [dilatancy,setDilatancy]=React.useState(\"\"); const [toughness,setToughness]=React.useState(\"\"); 
-    const [color,setColor]=React.useState(\"\"); const [odor,setOdor]=React.useState(\"\"); const [moisture,setMoisture]=React.useState(\"\"); const [hcl,setHcl]=React.useState(\"\"); 
-    const [intact,setIntact]=React.useState(false); const [consistency,setConsistency]=React.useState(\"\"); const [structure,setStructure]=React.useState([]); const [cementation,setCementation]=React.useState(\"\"); 
-    const [localName,setLocalName]=React.useState(\"\"); const [interp,setInterp]=React.useState(\"\"); const [notes,setNotes]=React.useState(\"\"); 
+const Label = ({ children }) => (
+  <label className="text-sm font-medium text-gray-800">{children}</label>
+);
 
-    const L=(arr,key,lang=\"ru\")=>{ const it=arr.find(x=>x.key===key); return it ? (lang===\"en\"?it.en:it.ru) : \"\"; };
-    const percentSum = React.useMemo(()=>{ const g=parseFloat(gravelPct||\"0\"), s=parseFloat(sandPct||\"0\"), f=parseFloat(finesPct||\"0\"); return g+s+f; },[gravelPct,sandPct,finesPct]);
-    const suggestFromSymbol=()=>{ if(symbol && sRU[symbol]) setGroupNameRU(sRU[symbol]); if(symbol && sEN[symbol]) setGroupNameEN(sEN[symbol]); };
+const TextInput = ({ value, onChange, placeholder, type="text" }) => (
+  <input className="w-full rounded-xl border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-800"
+         value={value ?? ""} onChange={e=>onChange(e.target.value)} placeholder={placeholder} type={type} />
+);
 
-    const buildRU=()=>{ const parts=[];
-      parts.push(`${groupNameRU||\"\"}`.trim()); parts.push(`${symbol?symbol:\"\"}`);
-      if(cobblesVol!==\"\") parts.push(`валунов/глыб ${cobblesVol}% (об.)`);
-      if([gravelPct,sandPct,finesPct].some(v=>v!==\"\")) parts.push(`гравий ${gravelPct||\"\"}%, песок ${sandPct||\"\"}%, мелочь ${finesPct||\"\"}% (по сух. массе)`);
-      const gr = gravelRange?`гравий ${L(GRAVEL_RANGES,gravelRange)}`:\"\"; const sr = sandRange?`песок ${L(SAND_RANGES,sandRange)}`:\"\"; if(gr||sr) parts.push(`диапазон крупности: ${[gr,sr].filter(Boolean).join(\", \")}`);
-      if(angularity) parts.push(`угловатость: ${L(ANGULARITY,angularity)}`); if(shape) parts.push(`форма зёрен: ${L(SHAPE,shape)}`); if(dmax) parts.push(`Dmax ${dmax} мм`); if(hardness) parts.push(`твёрдость частиц: ${hardness}`);
-      if(plasticity) parts.push(`пластичность мелочи: ${L(PLASTICITY,plasticity)}`); if(dryStrength) parts.push(`сухая прочность: ${L(DRY_STRENGTH,dryStrength)}`); if(dilatancy) parts.push(`дилатансия: ${L(DILATANCY,dilatancy)}`); if(toughness) parts.push(`вязкость: ${L(TOUGHNESS,toughness)}`);
-      if(color) parts.push(`цвет (во влажн.): ${color}`); if(odor) parts.push(`запах: ${odor}`); if(moisture) parts.push(`влажность: ${L(MOISTURE,moisture)}`); if(hcl) parts.push(`реакция с HCl: ${L(HCL,hcl)}`);
-      if(intact){ if(consistency) parts.push(`консистенция: ${L(CONSISTENCY,consistency)}`); if(structure.length) parts.push(`структура: ${structure.map(k=>L(STRUCTURE,k)).join(\", \")}`); if(cementation) parts.push(`цементация: ${L(CEMENTATION,cementation)}`); }
-      if(localName) parts.push(`местное название: ${localName}`); if(interp) parts.push(`геоинтерпретация: ${interp}`); if(notes) parts.push(`примечания: ${notes}`);
-      const head=[groupNameRU,symbol].filter(Boolean).join(\", \"); return `${head}${head?\"; \":\"\"}${parts.filter(Boolean).join(\"; \")}`.trim();
-    };
-    const buildEN=()=>{ const parts=[];
-      parts.push(`${groupNameEN||\"\"}`.trim()); parts.push(`${symbol?symbol:\"\"}`);
-      if(cobblesVol!==\"\") parts.push(`cobbles/boulders ${cobblesVol}% (by volume)`);
-      if([gravelPct,sandPct,finesPct].some(v=>v!==\"\")) parts.push(`gravel ${gravelPct||\"\"}%, sand ${sandPct||\"\"}%, fines ${finesPct||\"\"}% (by dry weight)`);
-      const gr = gravelRange?`gravel ${L(GRAVEL_RANGES,gravelRange,\"en\")}`:\"\"; const sr = sandRange?`sand ${L(SAND_RANGES,sandRange,\"en\")}`:\"\"; if(gr||sr) parts.push(`particle-size range: ${[gr,sr].filter(Boolean).join(\", \")}`);
-      if(angularity) parts.push(`angularity: ${L(ANGULARITY,angularity,\"en\")}`); if(shape) parts.push(`particle shape: ${L(SHAPE,shape,\"en\")}`); if(dmax) parts.push(`Dmax ${dmax} mm`); if(hardness) parts.push(`particle hardness: ${hardness}`);
-      if(plasticity) parts.push(`plasticity of fines: ${L(PLASTICITY,plasticity,\"en\")}`); if(dryStrength) parts.push(`dry strength: ${L(DRY_STRENGTH,dryStrength,\"en\")}`); if(dilatancy) parts.push(`dilatancy: ${L(DILATANCY,dilatancy,\"en\")}`); if(toughness) parts.push(`toughness: ${L(TOUGHNESS,toughness,\"en\")}`);
-      if(color) parts.push(`color (moist): ${color}`); if(odor) parts.push(`odor: ${odor}`); if(moisture) parts.push(`moisture: ${L(MOISTURE,moisture,\"en\")}`); if(hcl) parts.push(`reaction with HCl: ${L(HCL,hcl,\"en\")}`);
-      if(intact){ if(consistency) parts.push(`consistency: ${L(CONSISTENCY,consistency,\"en\")}`); if(structure.length) parts.push(`structure: ${structure.map(k=>L(STRUCTURE,k,\"en\")).join(\", \")}`); if(cementation) parts.push(`cementation: ${L(CEMENTATION,cementation,\"en\")}`); }
-      if(localName) parts.push(`local/commercial name: ${localName}`); if(interp) parts.push(`geologic interpretation: ${interp}`); if(notes) parts.push(`additional comments: ${notes}`);
-      const head=[groupNameEN,symbol].filter(Boolean).join(\", \"); return `${head}${head?\"; \":\"\"}${parts.filter(Boolean).join(\"; \")}`.trim();
-    };
-    const ru = buildRU(); const en = buildEN();
-    const copyBoth=()=>{ const noteRU = \"Примечание: символ и наименование USCS назначены визуально‑мануально по ASTM D2488.\"; const noteEN = \"Note: USCS group name and symbol assigned by visual–manual procedure per ASTM D2488.\"; const text = `RU:\\n${ru}\\n\\nEN:\\n${en}\\n\\n${noteRU}\\n${noteEN}`; navigator.clipboard.writeText(text).then(()=>alert(\"RU+EN скопировано\")); };
-    return (<div className=\"max-w-6xl mx-auto p-4 md:p-8 space-y-6\">
-      <header className=\"flex flex-col md:flex-row md:items-end md:justify-between gap-3\">
-        <div><h1 className=\"text-2xl md:text-3xl font-bold\">ASTM D2488 — Генератор описаний грунта (RU/EN)</h1><p className=\"text-sm text-gray-600 mt-1\">Поля и порядок соответствуют чек‑листу 1–23. Работает офлайн после установки как PWA.</p></div>
-        <div className=\"flex flex-wrap gap-2\">
-          <button className=\"px-4 py-2 rounded-xl border\" onClick={()=>location.reload()}>Сбросить</button>
-          <button className=\"px-4 py-2 rounded-xl border\" onClick={()=>{ if(symbol && sRU[symbol]) setGroupNameRU(sRU[symbol]); if(symbol && sEN[symbol]) setGroupNameEN(sEN[symbol]); }}>Предложить имя по символу</button>
-          <button className=\"px-4 py-2 rounded-xl bg-black text-white\" onClick={copyBoth}>Скопировать RU+EN</button>
+const NumberInput = ({ value, onChange, placeholder, step=1, min, max }) => (
+  <input className="w-full rounded-xl border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-800"
+         value={value ?? ""} onChange={e=>onChange(e.target.value.replace(",", "."))} placeholder={placeholder}
+         type="number" step={step} min={min} max={max} />
+);
+
+const Chips = ({ items, value, setValue, allowNone=true }) => (
+  <div className="flex flex-wrap gap-2">
+    {allowNone && (<button type="button" onClick={()=>setValue("")} className={"chip " + (!value ? "active" : "")}>—</button>)}
+    {items.map(it => (
+      <button key={it.key} type="button" onClick={()=>setValue(it.key)} className={"chip " + (value===it.key?"active":"")} title={it.en}>{it.ru}</button>
+    ))}
+  </div>
+);
+
+const MultiChips = ({ items, values, setValues }) => (
+  <div className="flex flex-wrap gap-2">
+    {items.map(it => {
+      const active = values.includes(it.key);
+      return <button key={it.key} type="button"
+        onClick={()=> active? setValues(values.filter(v=>v!==it.key)) : setValues([...values, it.key])}
+        className={"chip " + (active?"active":"")} title={it.en}>{it.ru}</button>;
+    })}
+  </div>
+);
+
+const CopyButton = ({ text, label="Скопировать" }) => (
+  <button onClick={async ()=>{
+    try { await navigator.clipboard.writeText(text); alert("Скопировано в буфер обмена"); }
+    catch(e){ alert("Не удалось скопировать автоматически. Скопируйте вручную."); }
+  }} className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90 active:opacity-80">{label}</button>
+);
+
+// Dictionaries
+const ANGULARITY=[{key:"angular",ru:"угловатые",en:"angular"},{key:"subangular",ru:"субугловатые",en:"subangular"},{key:"subrounded",ru:"субокатанные",en:"subrounded"},{key:"rounded",ru:"окатанные",en:"rounded"}];
+const SHAPE=[{key:"flat",ru:"плоские",en:"flat"},{key:"elongated",ru:"вытянутые",en:"elongated"},{key:"flatelong",ru:"плоско‑вытянутые",en:"flat and elongated"}];
+const SAND_RANGES=[{key:"fine",ru:"мелкий",en:"fine"},{key:"medium",ru:"средний",en:"medium"},{key:"coarse",ru:"крупный",en:"coarse"}];
+const GRAVEL_RANGES=[{key:"fine",ru:"мелкий",en:"fine"},{key:"coarse",ru:"крупный",en:"coarse"}];
+const PLASTICITY=[{key:"np",ru:"непластичная",en:"nonplastic"},{key:"low",ru:"низкая",en:"low"},{key:"med",ru:"средняя",en:"medium"},{key:"high",ru:"высокая",en:"high"}];
+const DRY_STRENGTH=[{key:"none",ru:"нет",en:"none"},{key:"low",ru:"низкая",en:"low"},{key:"med",ru:"средняя",en:"medium"},{key:"high",ru:"высокая",en:"high"},{key:"vhigh",ru:"очень высокая",en:"very high"}];
+const DILATANCY=[{key:"none",ru:"нет",en:"none"},{key:"slow",ru:"медленная",en:"slow"},{key:"rapid",ru:"быстрая",en:"rapid"}];
+const TOUGHNESS=[{key:"low",ru:"низкая",en:"low"},{key:"med",ru:"средняя",en:"medium"},{key:"high",ru:"высокая",en:"high"}];
+const MOISTURE=[{key:"dry",ru:"сухой",en:"dry"},{key:"moist",ru:"влажный",en:"moist"},{key:"wet",ru:"мокрый",en:"wet"}];
+const HCL=[{key:"none",ru:"нет",en:"none"},{key:"weak",ru:"слабая",en:"weak"},{key:"strong",ru:"сильная",en:"strong"}];
+const CONSISTENCY=[{key:"vsoft",ru:"очень мягкая",en:"very soft"},{key:"soft",ru:"мягкая",en:"soft"},{key:"firm",ru:"тугопластичная/firm",en:"firm"},{key:"hard",ru:"твёрдая",en:"hard"},{key:"vhard",ru:"очень твёрдая",en:"very hard"}];
+const STRUCTURE=[{key:"stratified",ru:"слоистая",en:"stratified"},{key:"laminated",ru:"ламинированная",en:"laminated"},{key:"fissured",ru:"трещиноватая",en:"fissured"},{key:"slickensided",ru:"со сликенсайдами",en:"slickensided"},{key:"lensed",ru:"линзовидная",en:"lensed"},{key:"homogeneous",ru:"однородная",en:"homogeneous"}];
+const CEMENTATION=[{key:"weak",ru:"слабая",en:"weak"},{key:"moderate",ru:"умеренная",en:"moderate"},{key:"strong",ru:"сильная",en:"strong"}];
+const SYMBOLS=["GW","GP","GM","GC","GW-GM","GW-GC","GP-GM","GP-GC","SW","SP","SM","SC","SW-SM","SW-SC","SP-SM","SP-SC","ML","CL","OL","MH","CH","OH","ML-CL","PT"];
+
+const sRU={"GW":"Гравий хорошо отсортированный","GP":"Гравий плохо отсортированный","GM":"Гравий с илами","GC":"Гравий с глинами","SW":"Песок хорошо отсортированный","SP":"Песок плохо отсортированный","SM":"Песок с илами","SC":"Песок с глинами","ML":"Илы низкой пластичности","CL":"Глины малой пластичности (суглинок)","MH":"Илы высокой пластичности","CH":"Глины высокой пластичности","OL":"Органические илы/глины (низкая пластичность)","OH":"Органические илы/глины (высокая пластичность)","PT":"Торф (высокоорганический)"};
+const sEN={"GW":"Well-graded gravel","GP":"Poorly graded gravel","GM":"Gravel with silt","GC":"Gravel with clay","SW":"Well-graded sand","SP":"Poorly graded sand","SM":"Sand with silt","SC":"Sand with clay","ML":"Silt of low plasticity","CL":"Lean clay","MH":"Elastic silt (high plasticity)","CH":"Fat clay (high plasticity)","OL":"Organic silt/clay (low plasticity)","OH":"Organic silt/clay (high plasticity)","PT":"Peat (highly organic)"};
+
+function App(){
+  const [groupNameRU,setGroupNameRU]=useState(""); const [groupNameEN,setGroupNameEN]=useState(""); const [symbol,setSymbol]=useState("");
+  const [cobblesVol,setCobblesVol]=useState(""); const [gravelPct,setGravelPct]=useState(""); const [sandPct,setSandPct]=useState(""); const [finesPct,setFinesPct]=useState("");
+  const [gravelRange,setGravelRange]=useState(""); const [sandRange,setSandRange]=useState("");
+  const [angularity,setAngularity]=useState(""); const [shape,setShape]=useState(""); const [dmax,setDmax]=useState(""); const [hardness,setHardness]=useState("");
+  const [plasticity,setPlasticity]=useState(""); const [dryStrength,setDryStrength]=useState(""); const [dilatancy,setDilatancy]=useState(""); const [toughness,setToughness]=useState("");
+  const [color,setColor]=useState(""); const [odor,setOdor]=useState(""); const [moisture,setMoisture]=useState(""); const [hcl,setHcl]=useState("");
+  const [intact,setIntact]=useState(false); const [consistency,setConsistency]=useState(""); const [structure,setStructure]=useState([]); const [cementation,setCementation]=useState("");
+  const [localName,setLocalName]=useState(""); const [interp,setInterp]=useState(""); const [notes,setNotes]=useState("");
+
+  const L=(arr,key,lang="ru")=>{ const it=arr.find(x=>x.key===key); return it ? (lang==="en"?it.en:it.ru) : ""; };
+  const percentSum = useMemo(()=>{ const g=parseFloat(gravelPct||"0"), s=parseFloat(sandPct||"0"), f=parseFloat(finesPct||"0"); return g+s+f; },[gravelPct,sandPct,finesPct]);
+  const suggestFromSymbol=()=>{ if(symbol && sRU[symbol]) setGroupNameRU(sRU[symbol]); if(symbol && sEN[symbol]) setGroupNameEN(sEN[symbol]); };
+
+  const buildRU=()=>{
+    const parts=[];
+    parts.push(`${groupNameRU||""}`.trim()); parts.push(`${symbol?symbol:""}`);
+    if(cobblesVol!=="") parts.push(`валунов/глыб ${cobblesVol}% (об.)`);
+    if([gravelPct,sandPct,finesPct].some(v=>v!=="" )) parts.push(`гравий ${gravelPct||""}%, песок ${sandPct||""}%, мелочь ${finesPct||""}% (по сух. массе)`);
+    const gr=gravelRange?`гравий ${L(GRAVEL_RANGES,gravelRange)}`:""; const sr=sandRange?`песок ${L(SAND_RANGES,sandRange)}`:""; if(gr||sr) parts.push(`диапазон крупности: ${[gr,sr].filter(Boolean).join(", ")}`);
+    if(angularity) parts.push(`угловатость: ${L(ANGULARITY,angularity)}`);
+    if(shape) parts.push(`форма зёрен: ${L(SHAPE,shape)}`);
+    if(dmax) parts.push(`Dmax ${dmax} мм`);
+    if(hardness) parts.push(`твёрдость частиц: ${hardness}`);
+    if(plasticity) parts.push(`пластичность мелочи: ${L(PLASTICITY,plasticity)}`);
+    if(dryStrength) parts.push(`сухая прочность: ${L(DRY_STRENGTH,dryStrength)}`);
+    if(dilatancy) parts.push(`дилатансия: ${L(DILATANCY,dilatancy)}`);
+    if(toughness) parts.push(`вязкость: ${L(TOUGHNESS,toughness)}`);
+    if(color) parts.push(`цвет (во влажн.): ${color}`);
+    if(odor) parts.push(`запах: ${odor}`);
+    if(moisture) parts.push(`влажность: ${L(MOISTURE,moisture)}`);
+    if(hcl) parts.push(`реакция с HCl: ${L(HCL,hcl)}`);
+    if(intact){ if(consistency) parts.push(`консистенция: ${L(CONSISTENCY,consistency)}`); if(structure.length) parts.push(`структура: ${structure.map(k=>L(STRUCTURE,k)).join(", ")}`); if(cementation) parts.push(`цементация: ${L(CEMENTATION,cementation)}`); }
+    if(localName) parts.push(`местное название: ${localName}`);
+    if(interp) parts.push(`геоинтерпретация: ${interp}`);
+    if(notes) parts.push(`примечания: ${notes}`);
+    const head=[groupNameRU,symbol].filter(Boolean).join(", "); return `${head}${head?"; ":""}${parts.filter(Boolean).join("; ")}`.trim();
+  };
+
+  const buildEN=()=>{
+    const parts=[];
+    parts.push(`${groupNameEN||""}`.trim()); parts.push(`${symbol?symbol:""}`);
+    if(cobblesVol!=="") parts.push(`cobbles/boulders ${cobblesVol}% (by volume)`);
+    if([gravelPct,sandPct,finesPct].some(v=>v!=="" )) parts.push(`gravel ${gravelPct||""}%, sand ${sandPct||""}%, fines ${finesPct||""}% (by dry weight)`);
+    const gr=gravelRange?`gravel ${L(GRAVEL_RANGES,gravelRange,"en")}`:""; const sr=sandRange?`sand ${L(SAND_RANGES,sandRange,"en")}`:""; if(gr||sr) parts.push(`particle-size range: ${[gr,sr].filter(Boolean).join(", ")}`);
+    if(angularity) parts.push(`angularity: ${L(ANGULARITY,angularity,"en")}`);
+    if(shape) parts.push(`particle shape: ${L(SHAPE,shape,"en")}`);
+    if(dmax) parts.push(`Dmax ${dmax} mm`);
+    if(hardness) parts.push(`particle hardness: ${hardness}`);
+    if(plasticity) parts.push(`plasticity of fines: ${L(PLASTICITY,plasticity,"en")}`);
+    if(dryStrength) parts.push(`dry strength: ${L(DRY_STRENGTH,dryStrength,"en")}`);
+    if(dilatancy) parts.push(`dilatancy: ${L(DILATANCY,dilatancy,"en")}`);
+    if(toughness) parts.push(`toughness: ${L(TOUGHNESS,toughness,"en")}`);
+    if(color) parts.push(`color (moist): ${color}`);
+    if(odor) parts.push(`odor: ${odor}`);
+    if(moisture) parts.push(`moisture: ${L(MOISTURE,moisture,"en")}`);
+    if(hcl) parts.push(`reaction with HCl: ${L(HCL,hcl,"en")}`);
+    if(intact){ if(consistency) parts.push(`consistency: ${L(CONSISTENCY,consistency,"en")}`); if(structure.length) parts.push(`structure: ${structure.map(k=>L(STRUCTURE,k,"en")).join(", ")}`); if(cementation) parts.push(`cementation: ${L(CEMENTATION,cementation,"en")}`); }
+    if(localName) parts.push(`local/commercial name: ${localName}`);
+    if(interp) parts.push(`geologic interpretation: ${interp}`);
+    if(notes) parts.push(`additional comments: ${notes}`);
+    const head=[groupNameEN,symbol].filter(Boolean).join(", "); return `${head}${head?"; ":""}${parts.filter(Boolean).join("; ")}`.trim();
+  };
+
+  const ru = buildRU();
+  const en = buildEN();
+
+  const copyBoth=()=>{
+    const noteRU = "Примечание: символ и наименование USCS назначены визуально‑мануально по ASTM D2488.";
+    const noteEN = "Note: USCS group name and symbol assigned by visual–manual procedure per ASTM D2488.";
+    const text = `RU:\n${ru}\n\nEN:\n${en}\n\n${noteRU}\n${noteEN}`;
+    navigator.clipboard.writeText(text).then(()=>alert("RU+EN скопировано"));
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
+      <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold">ASTM D2488 — Генератор описаний грунта (RU/EN)</h1>
+          <p className="text-sm text-gray-600 mt-1">Заполняйте поля и выбирайте значения — ниже формируется строка RU и EN в правильной последовательности (1–23).</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button className="px-4 py-2 rounded-xl border" onClick={()=>location.reload()}>Сбросить</button>
+          <button className="px-4 py-2 rounded-xl border" onClick={()=>{ if(symbol && sRU[symbol]) setGroupNameRU(sRU[symbol]); if(symbol && sEN[symbol]) setGroupNameEN(sEN[symbol]); }}>Предложить имя по символу</button>
+          <button className="px-4 py-2 rounded-xl bg-black text-white" onClick={copyBoth}>Скопировать RU+EN</button>
         </div>
       </header>
-      <div className=\"grid grid-cols-1 lg:grid-cols-2 gap-6\">
-        <Section title=\"1–2. Наименование и символ\">
-          <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">
-            <div><Label>Групповое наименование (RU)</Label><TextInput value={groupNameRU} onChange={setGroupNameRU} placeholder=\"например: Песок хорошо отсортированный\"/></div>
-            <div><Label>Group name (EN)</Label><TextInput value={groupNameEN} onChange={setGroupNameEN} placeholder=\"e.g., Well-graded sand\"/></div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Section title="1–2. Наименование и символ">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div><Label>Групповое наименование (RU)</Label><TextInput value={groupNameRU} onChange={setGroupNameRU} placeholder="например: Песок хорошо отсортированный"/></div>
+            <div><Label>Group name (EN)</Label><TextInput value={groupNameEN} onChange={setGroupNameEN} placeholder="e.g., Well-graded sand"/></div>
           </div>
-          <div><Label>USCS символ</Label><div className=\"flex flex-wrap gap-2 mt-1\"><TextInput value={symbol} onChange={setSymbol} placeholder=\"например: SW-SM\"/><div className=\"flex flex-wrap gap-2\">{SYMBOLS.map(s=>(<button type=\"button\" key={s} className={\"chip \"+(symbol===s?\"active\":\"\")} onClick={()=>setSymbol(s)}>{s}</button>))}</div></div></div>
+          <div><Label>USCS символ</Label><div className="flex flex-wrap gap-2 mt-1"><TextInput value={symbol} onChange={setSymbol} placeholder="например: SW-SM"/><div className="flex flex-wrap gap-2">{SYMBOLS.map(s=>(<button type="button" key={s} className={"chip " + (symbol===s?"active":"")} onClick={()=>setSymbol(s)}>{s}</button>))}</div></div></div>
         </Section>
-        <Section title=\"3–5. Состав и крупность\">
-          <div className=\"grid grid-cols-1 md:grid-cols-3 gap-4\">
-            <div><Label>Валунов/глыб (% об.)</Label><NumberInput value={cobblesVol} onChange={setCobblesVol} placeholder=\"%\" step={1} min={0} max={100}/></div>
-            <div><Label>Гравий (% сух.)</Label><NumberInput value={gravelPct} onChange={setGravelPct} placeholder=\"%\" step={1} min={0} max={100}/></div>
-            <div><Label>Песок (% сух.)</Label><NumberInput value={sandPct} onChange={setSandPct} placeholder=\"%\" step={1} min={0} max={100}/></div>
-            <div><Label>Мелочь/fines (% сух.)</Label><NumberInput value={finesPct} onChange={setFinesPct} placeholder=\"%\" step={1} min={0} max={100}/></div>
-            <div className=\"md:col-span-2 flex items-center gap-2 text-sm text-gray-600\"><span>Сумма G+S+F: <b>{isNaN(percentSum)?\"—\":percentSum}</b>%</span>{(percentSum!==0 && percentSum!==100)&&(<span className=\"text-red-600\">(не 100 % — проверьте)</span>)}</div>
+
+        <Section title="3–5. Состав и крупность">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div><Label>Валунов/глыб (% об.)</Label><NumberInput value={cobblesVol} onChange={setCobblesVol} placeholder="%" step={1} min={0} max={100}/></div>
+            <div><Label>Гравий (% сух.)</Label><NumberInput value={gravelPct} onChange={setGravelPct} placeholder="%" step={1} min={0} max={100}/></div>
+            <div><Label>Песок (% сух.)</Label><NumberInput value={sandPct} onChange={setSandPct} placeholder="%" step={1} min={0} max={100}/></div>
+            <div><Label>Мелочь/fines (% сух.)</Label><NumberInput value={finesPct} onChange={setFinesPct} placeholder="%" step={1} min={0} max={100}/></div>
+            <div className="md:col-span-2 text-sm text-gray-600">Сумма G+S+F: <b>{isNaN(percentSum)?"—":percentSum}</b>% {(percentSum!==0 && percentSum!==100) && <span className="text-red-600">(не 100 % — проверьте)</span>}</div>
           </div>
-          <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><Label>Диапазон крупности гравия</Label><Chips items={GRAVEL_RANGES} value={gravelRange} setValue={setGravelRange}/></div>
             <div><Label>Диапазон крупности песка</Label><Chips items={SAND_RANGES} value={sandRange} setValue={setSandRange}/></div>
           </div>
         </Section>
-        <Section title=\"6–9. Формы и размеры\">
-          <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">
+
+        <Section title="6–9. Формы и размеры">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><Label>Угловатость зёрен</Label><Chips items={ANGULARITY} value={angularity} setValue={setAngularity}/></div>
             <div><Label>Форма зёрен (если выражена)</Label><Chips items={SHAPE} value={shape} setValue={setShape}/></div>
-            <div><Label>Максимальный размер (Dmax, мм)</Label><NumberInput value={dmax} onChange={setDmax} placeholder=\"мм\" step={0.1} min={0}/></div>
-            <div><Label>Твёрдость частиц (крупн. песок и крупнее)</Label><TextInput value={hardness} onChange={setHardness} placeholder=\"например: низкая/средняя/высокая\"/></div>
+            <div><Label>Максимальный размер (Dmax, мм)</Label><NumberInput value={dmax} onChange={setDmax} placeholder="мм" step={0.1} min={0}/></div>
+            <div><Label>Твёрдость частиц (крупн. песок и крупнее)</Label><TextInput value={hardness} onChange={setHardness} placeholder="например: низкая/средняя/высокая"/></div>
           </div>
         </Section>
-        <Section title=\"10–13. Свойства тонкой фракции\">
-          <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">
+
+        <Section title="10–13. Свойства тонкой фракции">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><Label>Пластичность мелочи</Label><Chips items={PLASTICITY} value={plasticity} setValue={setPlasticity}/></div>
             <div><Label>Сухая прочность</Label><Chips items={DRY_STRENGTH} value={dryStrength} setValue={setDryStrength}/></div>
             <div><Label>Дилатансия</Label><Chips items={DILATANCY} value={dilatancy} setValue={setDilatancy}/></div>
             <div><Label>Вязкость (toughness)</Label><Chips items={TOUGHNESS} value={toughness} setValue={setToughness}/></div>
           </div>
         </Section>
-        <Section title=\"14–17. Цвет, запах, влажность, HCl\">
-          <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">
-            <div><Label>Цвет (во влажном состоянии)</Label><TextInput value={color} onChange={setColor} placeholder=\"например: светло‑бурый\"/></div>
-            <div><Label>Запах (если есть)</Label><TextInput value={odor} onChange={setOdor} placeholder=\"например: слабый органический / —\"/></div>
+
+        <Section title="14–17. Цвет, запах, влажность, HCl">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div><Label>Цвет (во влажном состоянии)</Label><TextInput value={color} onChange={setColor} placeholder="например: светло‑бурый"/></div>
+            <div><Label>Запах (если есть)</Label><TextInput value={odor} onChange={setOdor} placeholder="например: слабый органический / —"/></div>
             <div><Label>Влажность</Label><Chips items={MOISTURE} value={moisture} setValue={setMoisture}/></div>
             <div><Label>Реакция с HCl</Label><Chips items={HCL} value={hcl} setValue={setHcl}/></div>
           </div>
         </Section>
-        <Section title=\"18–20. Только для неразрушённых образцов\">
-          <div className=\"flex items-center gap-3\"><input id=\"intact\" type=\"checkbox\" checked={intact} onChange={e=>setIntact(e.target.checked)}/><Label>Отмечать поля для неразрушённых образцов</Label></div>
-          {intact && (<div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">
-            <div><Label>Консистенция (тонкодисперсные)</Label><Chips items={CONSISTENCY} value={consistency} setValue={setConsistency}/></div>
-            <div><Label>Цементация</Label><Chips items={CEMENTATION} value={cementation} setValue={setCementation}/></div>
-            <div className=\"md:col-span-2\"><Label>Структура (можно несколько)</Label><MultiChips items={STRUCTURE} values={structure} setValues={setStructure}/></div>
-          </div>)}
-        </Section>
-        <Section title=\"21–23. Прочее\">
-          <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">
-            <div><Label>Местное/коммерческое название</Label><TextInput value={localName} onChange={setLocalName} placeholder=\"например: лёсс, супесь и т.п.\"/></div>
-            <div><Label>Geologic interpretation (геоинтерпретация)</Label><TextInput value={interp} onChange={setInterp} placeholder=\"e.g., alluvial sand / делювий\"/></div>
+
+        <Section title="18–20. Только для неразрушённых образцов">
+          <div className="flex items-center gap-3">
+            <input id="intact" type="checkbox" checked={intact} onChange={e=>setIntact(e.target.checked)}/>
+            <Label>Отмечать поля для неразрушённых образцов</Label>
           </div>
-          <div><Label>Дополнительные примечания</Label><TextInput value={notes} onChange={setNotes} placeholder=\"корни/пустоты; слюда/гипс; осыпание; трудности бурения…\"/></div>
+          {intact && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div><Label>Консистенция (тонкодисперсные)</Label><Chips items={CONSISTENCY} value={consistency} setValue={setConsistency}/></div>
+              <div><Label>Цементация</Label><Chips items={CEMENTATION} value={cementation} setValue={setCementation}/></div>
+              <div className="md:col-span-2"><Label>Структура (можно несколько)</Label><MultiChips items={STRUCTURE} values={structure} setValues={setStructure}/></div>
+            </div>
+          )}
+        </Section>
+
+        <Section title="21–23. Прочее">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div><Label>Местное/коммерческое название</Label><TextInput value={localName} onChange={setLocalName} placeholder="например: лёсс, супесь и т.п."/></div>
+            <div><Label>Geologic interpretation (геоинтерпретация)</Label><TextInput value={interp} onChange={setInterp} placeholder="e.g., alluvial sand / делювий"/></div>
+          </div>
+          <div><Label>Дополнительные примечания</Label><TextInput value={notes} onChange={setNotes} placeholder="корни/пустоты; слюда/гипс; осыпание; трудности бурения…"/></div>
         </Section>
       </div>
-      <Section title=\"Сформированное описание — RU и EN\" subtitle=\"Кнопки для копирования ниже.\">
-        <div className=\"grid grid-cols-1 lg:grid-cols-2 gap-4\">
-          <div className=\"space-y-2\"><div className=\"flex items-center justify-between\"><h3 className=\"font-semibold\">RU</h3><CopyButton text={ru} label=\"Копировать RU\"/></div><textarea className=\"w-full h-48 rounded-xl border p-3\" value={ru} readOnly/></div>
-          <div className=\"space-y-2\"><div className=\"flex items-center justify-between\"><h3 className=\"font-semibold\">EN</h3><CopyButton text={en} label=\"Copy EN\"/></div><textarea className=\"w-full h-48 rounded-xl border p-3\" value={en} readOnly/></div>
-        </div>
-        <div className=\"flex flex-wrap gap-2\"><CopyButton text={`RU:\\n${ru}`} label=\"Копировать только RU\"/><CopyButton text={`EN:\\n${en}`} label=\"Copy only EN\"/><CopyButton text={`RU:\\n${ru}\\n\\nEN:\\n${en}`} label=\"Скопировать RU+EN\"/></div>
-        <p className=\"text-xs text-gray-500\">Примечание: USCS имя и символ должны быть отмечены как назначенные визуально‑мануальной процедурой ASTM D2488; для лабораторной классификации используется ASTM D2487.</p>
-      </Section>
-      <footer className=\"text-xs text-gray-500 text-center pt-2\">© ASTM D2488 RU/EN helper. Offline-capable PWA.</footer>
-    </div>);
-  }
-  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
-  </script>
 
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service-worker.js').catch(err => console.error('SW reg failed', err));
-      });
-    }
-  </script>
+      <Section title="Сформированное описание — RU и EN" subtitle="Кнопки для копирования ниже.">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="space-y-2"><div className="flex items-center justify-between"><h3 className="font-semibold">RU</h3><CopyButton text={ru} label="Копировать RU"/></div><textarea className="w-full h-48 rounded-xl border p-3" value={ru} readOnly/></div>
+          <div className="space-y-2"><div className="flex items-center justify-between"><h3 className="font-semibold">EN</h3><CopyButton text={en} label="Copy EN"/></div><textarea className="w-full h-48 rounded-xl border p-3" value={en} readOnly/></div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <CopyButton text={`RU:\n${ru}`} label="Копировать только RU"/>
+          <CopyButton text={`EN:\n${en}`} label="Copy only EN"/>
+          <CopyButton text={`RU:\n${ru}\n\nEN:\n${en}`} label="Скопировать RU+EN"/>
+        </div>
+        <p className="text-xs text-gray-500">Примечание: USCS имя и символ должны быть отмечены как назначенные визуально‑мануальной процедурой ASTM D2488; для лабораторной классификации используется ASTM D2487.</p>
+      </Section>
+
+      <footer className="text-xs text-gray-500 text-center pt-2">© ASTM D2488 RU/EN helper. Single-file HTML.</footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
 </body>
 </html>
